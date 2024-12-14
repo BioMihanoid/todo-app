@@ -5,12 +5,23 @@ import (
 	"fmt"
 	"github.com/BioMihanoid/todo-app"
 	"github.com/BioMihanoid/todo-app/pkg/repository"
+	"github.com/dgrijalva/jwt-go"
+	"time"
 )
 
-const salt = "whrnjmdjemtnsjsr"
+const (
+	salt       = "whrnjmdjemtnsjsr"
+	signingKey = "phAFSawo2o42]h]2kAFs20((**&"
+	tokenTTL   = 12 * time.Hour
+)
 
 type AuthService struct {
 	repo repository.Authorization
+}
+
+type tokenClaims struct {
+	jwt.StandardClaims
+	UserId int `json:"user_id"`
 }
 
 func NewAuthService(repo repository.Authorization) *AuthService {
@@ -27,4 +38,22 @@ func (s *AuthService) generatePasswordHash(password string) string {
 	hash.Write([]byte(password))
 
 	return fmt.Sprintf("%x", hash.Sum([]byte(salt)))
+}
+
+func (s *AuthService) GenerateToken(username, password string) (string, error) {
+	user, err := s.repo.GetUser(username, s.generatePasswordHash(password))
+
+	if err != nil {
+		return "", err
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(12 * time.Hour).Unix(),
+			IssuedAt:  time.Now().Unix(),
+		},
+		user.Id,
+	})
+
+	return token.SignedString([]byte(signingKey))
 }
